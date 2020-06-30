@@ -36,6 +36,8 @@ const defaultConfig: InMemoryCacheConfig = {
   typePolicies: {},
 };
 
+
+
 export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   private data: EntityStore;
   private optimisticData: EntityStore;

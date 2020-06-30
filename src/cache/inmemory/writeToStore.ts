@@ -1,7 +1,7 @@
 import { SelectionSetNode, FieldNode, DocumentNode } from 'graphql';
 import { invariant, InvariantError } from 'ts-invariant';
 import { equal } from '@wry/equality';
-
+import queue, {Queue, Worker} from 'react-native-job-queue'
 import {
   createFragmentMap,
   FragmentMap,
@@ -31,7 +31,13 @@ import { cloneDeep } from '../../utilities/common/cloneDeep';
 import { NormalizedCache, ReadMergeModifyContext } from './types';
 import { makeProcessedFieldsMerger, FieldValueToBeMerged, fieldNameFromStoreName } from './helpers';
 import { StoreReader } from './readFromStore';
-import { InMemoryCache } from './inMemoryCache';
+import {InMemoryCache} from "./inMemoryCache";
+
+export interface IExpireMap
+{
+  [key: string]: boolean;
+}
+
 
 export interface WriteContext extends ReadMergeModifyContext {
   readonly written: {
@@ -61,10 +67,40 @@ export interface WriteToStoreOptions {
 }
 
 export class StoreWriter {
-  constructor(
-    public readonly cache: InMemoryCache,
-    private reader?: StoreReader,
-  ) {}
+
+  private queue: Queue
+  public cache: InMemoryCache
+  private reader?: StoreReader
+  private expireMap: IExpireMap = {}
+
+  constructor(cache : InMemoryCache, reader: StoreReader) {
+    this.cache = cache;
+    this.reader = reader;
+    this.queue = queue;
+    this.queue.configure({
+      onQueueFinish: (executedJobs) => {
+        console.log('Queue stopped and executed', executedJobs);
+        this.cache.gc();
+        return executedJobs;
+      },
+      updateInterval : 100, //600000
+    });
+    this.queue.addWorker(
+        new Worker('removeCacheEntry', async (payload) => {
+          return new Promise((resolve) => {
+            setTimeout(async () => {
+              console.log('Evicting:  '+ payload.id)
+              this.cache.evict(payload.id);
+              delete this.expireMap[payload.id];
+              resolve();
+            }, payload.delay);
+          });
+        }, {
+          concurrency : 1
+        }),
+    );
+
+  }
 
   /**
    * Writes the result of a query to the store.
@@ -113,7 +149,6 @@ export class StoreWriter {
 
     const ref = isReference(objOrRef) ? objOrRef :
       dataId && makeReference(dataId) || void 0;
-
     if (ref) {
       // Any IDs written explicitly to the cache (including ROOT_QUERY,
       // most frequently) will be retained as reachable root IDs.
@@ -194,6 +229,7 @@ export class StoreWriter {
     }
 
     const workSet = new Set(selectionSet.selections);
+
 
     workSet.forEach(selection => {
       if (!shouldInclude(selection, context.variables)) return;
@@ -279,6 +315,25 @@ export class StoreWriter {
             );
           }
         });
+      }
+      if (dataId !== 'ROOT_QUERY' && mergedFields.maxAge){
+        this.expireMap[dataId] = true;
+        this.queue.getJobs().then((jobs) => {
+          const existingJob = jobs.find(e => JSON.parse(e.payload).id === dataId)
+
+          if(existingJob === undefined){
+            console.log(dataId + ' will be evicted from the cache in: 5s')
+            this.queue.addJob('removeCacheEntry', {
+              id: dataId,
+              executionTime : new Date(new Date().getTime() + 30000).toISOString(),
+            });
+          }else{
+            console.log('existingJob:', existingJob)
+            // this.queue.updateJob()
+          }
+        })
+
+
       }
 
       context.store.merge(dataId, mergedFields);
