@@ -78,7 +78,7 @@ export class StoreWriter {
                 this.cache.gc();
                 return executedJobs;
             },
-            updateInterval: 600000
+            updateInterval: 60000
         });
         this.queue.addWorker(
             new Worker('removeCacheEntry', async (payload) => {
