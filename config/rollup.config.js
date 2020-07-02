@@ -8,15 +8,19 @@ import packageJson from '../package.json';
 const distDir = './dist';
 
 const external = [
-    'tslib',
-    'ts-invariant',
-    'symbol-observable',
-    'graphql/language/printer',
-    'optimism',
-    'graphql/language/visitor',
-    'graphql-tag',
-    'fast-json-stable-stringify',
-    '@wry/equality',
+  'tslib',
+  'ts-invariant',
+  'symbol-observable',
+  'graphql/language/printer',
+  'optimism',
+  'graphql/language/visitor',
+  'graphql-tag',
+  'fast-json-stable-stringify',
+  '@wry/context',
+  '@wry/equality',
+  'react',
+
+
     'react',
     'react-native',
     'react-native-job-queue',
@@ -173,14 +177,32 @@ function prepareTesting() {
     };
 }
 
+function prepareReactSSR() {
+  const ssrDistDir = `${distDir}/react/ssr`;
+  return {
+    input: `${ssrDistDir}/index.js`,
+    external,
+    output: {
+      file: `${ssrDistDir}/ssr.cjs.js`,
+      format: 'cjs',
+      sourcemap: true,
+      exports: 'named',
+    },
+    plugins: [
+      nodeResolve(),
+    ],
+  };
+}
+
 function rollup() {
-    return [
-        prepareESM(packageJson.module, distDir),
-        prepareCJS(packageJson.module, packageJson.main),
-        prepareCJSMinified(packageJson.main),
-        prepareUtilities(),
-        prepareTesting(),
-    ];
+  return [
+    prepareESM(packageJson.module, distDir),
+    prepareCJS(packageJson.module, packageJson.main),
+    prepareCJSMinified(packageJson.main),
+    prepareUtilities(),
+    prepareTesting(),
+    prepareReactSSR(),
+  ];
 }
 
 export default rollup();
