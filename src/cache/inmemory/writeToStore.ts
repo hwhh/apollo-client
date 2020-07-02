@@ -88,12 +88,10 @@ export class StoreWriter {
     this.queue.addWorker(
         new Worker('removeCacheEntry', async (payload) => {
           return new Promise((resolve) => {
-            setTimeout(async () => {
               console.log('Evicting:  '+ payload.id)
               this.cache.evict(payload.id);
               delete this.expireMap[payload.id];
               resolve();
-            }, payload.delay);
           });
         }, {
           concurrency : 1
