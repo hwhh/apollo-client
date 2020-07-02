@@ -332,7 +332,6 @@ export class StoreWriter {
                     }
                 })
             }
-
             context.store.merge(dataId, mergedFields);
 
             return entityRef;
