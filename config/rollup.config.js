@@ -8,20 +8,20 @@ import packageJson from '../package.json';
 const distDir = './dist';
 
 const external = [
-  'tslib',
-  'ts-invariant',
-  'symbol-observable',
-  'graphql/language/printer',
-  'optimism',
-  'graphql/language/visitor',
-  'graphql-tag',
-  'fast-json-stable-stringify',
-  '@wry/context',
-  '@wry/equality',
-  'react',
-  'prop-types',
-  'hoist-non-react-statics',
-  'subscriptions-transport-ws'
+    'tslib',
+    'ts-invariant',
+    'symbol-observable',
+    'graphql/language/printer',
+    'optimism',
+    'graphql/language/visitor',
+    'graphql-tag',
+    'fast-json-stable-stringify',
+    '@wry/context',
+    '@wry/equality',
+    'react',
+    'prop-types',
+    'hoist-non-react-statics',
+    'subscriptions-transport-ws',
     'react',
     'react-native',
     'react-native-job-queue',
@@ -179,41 +179,41 @@ function prepareTesting() {
 }
 
 function prepareBundle(name, path) {
-  const dir = `${distDir}/${path}`;
-  return {
-    input: `${dir}/index.js`,
-    external,
-    output: {
-      file: `${dir}/${name}.cjs.js`,
-      format: 'cjs',
-      sourcemap: true,
-      exports: 'named',
-    },
-    plugins: [
-      nodeResolve(),
-    ],
-  };
+    const dir = `${distDir}/${path}`;
+    return {
+        input: `${dir}/index.js`,
+        external,
+        output: {
+            file: `${dir}/${name}.cjs.js`,
+            format: 'cjs',
+            sourcemap: true,
+            exports: 'named',
+        },
+        plugins: [
+            nodeResolve(),
+        ],
+    };
 }
 
 function rollup() {
-  return [
-    prepareESM(packageJson.module, distDir),
-    prepareCJS(packageJson.module, packageJson.main),
-    prepareCJSMinified(packageJson.main),
-    prepareUtilities(),
-    prepareTesting(),
-    prepareBundle('ssr', 'react/ssr'),
-    prepareBundle('components', 'react/components'),
-    prepareBundle('hoc', 'react/hoc'),
-    prepareBundle('batch', 'link/batch'),
-    prepareBundle('batch-http', 'link/batch-http'),
-    prepareBundle('context', 'link/context'),
-    prepareBundle('error', 'link/error'),
-    prepareBundle('retry', 'link/retry'),
-    prepareBundle('schema', 'link/schema'),
-    prepareBundle('ws', 'link/ws'),
-    prepareBundle('http', 'link/http'),
-  ];
+    return [
+        prepareESM(packageJson.module, distDir),
+        prepareCJS(packageJson.module, packageJson.main),
+        prepareCJSMinified(packageJson.main),
+        prepareUtilities(),
+        prepareTesting(),
+        prepareBundle('ssr', 'react/ssr'),
+        prepareBundle('components', 'react/components'),
+        prepareBundle('hoc', 'react/hoc'),
+        prepareBundle('batch', 'link/batch'),
+        prepareBundle('batch-http', 'link/batch-http'),
+        prepareBundle('context', 'link/context'),
+        prepareBundle('error', 'link/error'),
+        prepareBundle('retry', 'link/retry'),
+        prepareBundle('schema', 'link/schema'),
+        prepareBundle('ws', 'link/ws'),
+        prepareBundle('http', 'link/http'),
+    ];
 }
 
 export default rollup();
