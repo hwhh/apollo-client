@@ -1,7 +1,7 @@
 import {SelectionSetNode, FieldNode, DocumentNode} from 'graphql';
 import {invariant, InvariantError} from 'ts-invariant';
 import {equal} from '@wry/equality';
-import queue, {Queue, Worker} from 'react-native-job-queue'
+import queue, {Queue, Worker} from 'react-native-job-queue';
 import {
     createFragmentMap,
     FragmentMap,
@@ -32,6 +32,7 @@ import {NormalizedCache, ReadMergeModifyContext} from './types';
 import {makeProcessedFieldsMerger, FieldValueToBeMerged, fieldNameFromStoreName} from './helpers';
 import {StoreReader} from './readFromStore';
 import {InMemoryCache} from "./inMemoryCache";
+import {Job, RawJob} from "react-native-job-queue/src/models/Job";
 
 
 export interface WriteContext extends ReadMergeModifyContext {
@@ -73,24 +74,26 @@ export class StoreWriter {
         this.reader = reader;
         this.queue = queue;
         this.queue.configure({
-            onQueueFinish: (executedJobs) => {
+            onQueueFinish: (executedJobs:Array<Job<any>>) => {
                 console.log('Queue stopped and executed', executedJobs);
                 this.cache.gc();
                 return executedJobs;
             },
             updateInterval: 60000
         });
-        this.queue.addWorker(
-            new Worker('removeCacheEntry', async (payload) => {
-                return new Promise((resolve) => {
-                    console.log('Evicting:  ' + payload.id)
-                    this.cache.evict(payload.id);
-                    resolve();
-                });
-            }, {
-                concurrency: 10
-            }),
-        );
+        if(!Object.keys(this.queue.registeredWorkers).some((worker: string) => worker === 'removeCacheEntry')) {
+            this.queue.addWorker(
+                new Worker('removeCacheEntry', async (payload: any) => {
+                    return new Promise((resolve) => {
+                        console.log('Evicting:  ' + payload.id)
+                        this.cache.evict(payload.id);
+                        resolve();
+                    });
+                }, {
+                    concurrency: 10
+                }),
+            );
+        }
 
     }
 
@@ -309,10 +312,10 @@ export class StoreWriter {
                 });
             }
             if (dataId !== 'ROOT_QUERY' && mergedFields.maxAge) {
-                this.queue.getJobs().then((jobs) => {
-                    const existingJob = jobs.find(e => JSON.parse(e.payload).id === dataId)
+                this.queue.getJobs().then((jobs: RawJob[]) => {
+                    const existingJob = jobs.find(job => JSON.parse(job.payload).id === dataId)
                     if (existingJob === undefined) {
-                        console.log(dataId + ' will be evicted from the cache on: ', new Date(Number(mergedFields.maxAge)).toISOString())
+                        console.log(dataId + ' will be evicted from the cache at: ', new Date(Number(mergedFields.maxAge)).toISOString())
                         this.queue.addJob('removeCacheEntry', {
                             id: dataId,
                             executionTime: new Date(Number(mergedFields.maxAge)).toISOString(),
@@ -321,7 +324,8 @@ export class StoreWriter {
                         this.queue.updateJobExecutionTime({
                             ...existingJob,
                             executionTime: new Date(Number(mergedFields.maxAge)).toISOString()
-                        }).then((success) => {
+                        }).then((success: boolean) => {
+                            console.log(dataId + ' updated and will now be evicted from the cache at: ', new Date(Number(mergedFields.maxAge)).toISOString())
                             if (!success){
                                 this.queue.addJob('removeCacheEntry', {
                                     id: dataId,
@@ -330,6 +334,7 @@ export class StoreWriter {
                             }
                         })
                     }
+
                 })
             }
             context.store.merge(dataId, mergedFields);
