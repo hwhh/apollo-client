@@ -1,9 +1,12 @@
+import nodeResolve from '@rollup/plugin-node-resolve';
+import { terser as minify } from 'rollup-plugin-terser';
+import path from 'path';
 import nodeResolve from 'rollup-plugin-node-resolve';
 import invariantPlugin from 'rollup-plugin-invariant';
-import {terser as minify} from 'rollup-plugin-terser';
 import fs from 'fs';
 
-import packageJson from '../package.json';
+const packageJson = require('../package.json');
+const entryPoints = require('./entryPoints');
 
 const distDir = './dist';
 
@@ -18,7 +21,6 @@ const external = [
     'fast-json-stable-stringify',
     '@wry/context',
     '@wry/equality',
-    'react',
     'prop-types',
     'hoist-non-react-statics',
     'subscriptions-transport-ws',
@@ -57,6 +59,24 @@ function prepareESM(input, outputDir) {
         ],
     };
 }
+const externalPackages = new Set([
+  '@wry/context',
+  '@wry/equality',
+  'fast-json-stable-stringify',
+  'graphql-tag',
+  'graphql/execution/execute',
+  'graphql/language/printer',
+  'graphql/language/visitor',
+  'hoist-non-react-statics',
+  'optimism',
+  'prop-types',
+  'react',
+  'subscriptions-transport-ws',
+  'symbol-observable',
+  'ts-invariant',
+  'tslib',
+  'zen-observable',
+]);
 
 function prepareCJS(input, output) {
     return {
@@ -105,6 +125,22 @@ function prepareCJS(input, output) {
             })()
         ],
     };
+  return {
+    input,
+    external(id) {
+      return externalPackages.has(id);
+    },
+    output: {
+      file: output,
+      format: 'cjs',
+      sourcemap: true,
+      exports: 'named',
+      externalLiveBindings: false,
+    },
+    plugins: [
+      nodeResolve(),
+    ],
+  };
 }
 
 function prepareCJSMinified(input) {
@@ -130,90 +166,39 @@ function prepareCJSMinified(input) {
     };
 }
 
-function prepareUtilities() {
-    const utilsDistDir = `${distDir}/utilities`;
-    return {
-        input: `${utilsDistDir}/index.js`,
-        external,
-        output: {
-            file: `${utilsDistDir}/utilities.cjs.js`,
-            format: 'cjs',
-            sourcemap: true,
-            exports: 'named',
-        },
-        plugins: [
-            nodeResolve(),
-        ],
-    };
-}
-
-// Build a separate CJS only `testing.js` bundle, that includes React
-// testing utilities like `MockedProvider` (testing utilities are kept out of
-// the main `apollo-client` bundle). This bundle can be accessed directly
-// like:
-//
-// import { MockedProvider } from '@apollo/client/testing';
-function prepareTesting() {
-    const bundleName = 'testing';
-
-    // Create a type file for the new testing bundle that points to the existing
-    // `react/testing` type definitions.
-    fs.writeFileSync(
-        `${distDir}/${bundleName}.d.ts`,
-        "export * from './utilities/testing';"
-    );
-
-    return {
-        input: `${distDir}/utilities/testing/index.js`,
-        external,
-        output: {
-            file: `${distDir}/${bundleName}.js`,
-            format: 'cjs',
-        },
-        plugins: [
-            nodeResolve({
-                extensions: ['.js', '.jsx'],
-            }),
-        ],
-    };
-}
-
-function prepareBundle(name, path) {
-    const dir = `${distDir}/${path}`;
+function prepareBundle({
+    dirs,
+        bundleName = dirs[dirs.length - 1],
+                extensions,
+}) {
+    const dir = path.join(distDir, ...dirs);
     return {
         input: `${dir}/index.js`,
-        external,
+        external(id, parentId) {
+      return externalPackages.has(id) ||
+        entryPoints.check(id, parentId);
+    },
         output: {
-            file: `${dir}/${name}.cjs.js`,
+            file: `${dir}/${bundleName}.cjs.js`,
             format: 'cjs',
             sourcemap: true,
-            exports: 'named',
+            exports: 'named',externalLiveBindings: false,
         },
         plugins: [
-            nodeResolve(),
+            extensions ? nodeResolve({ extensions }) :nodeResolve(),
         ],
     };
 }
 
-function rollup() {
-    return [
-        prepareESM(packageJson.module, distDir),
-        prepareCJS(packageJson.module, packageJson.main),
-        prepareCJSMinified(packageJson.main),
-        prepareUtilities(),
-        prepareTesting(),
-        prepareBundle('ssr', 'react/ssr'),
-        prepareBundle('components', 'react/components'),
-        prepareBundle('hoc', 'react/hoc'),
-        prepareBundle('batch', 'link/batch'),
-        prepareBundle('batch-http', 'link/batch-http'),
-        prepareBundle('context', 'link/context'),
-        prepareBundle('error', 'link/error'),
-        prepareBundle('retry', 'link/retry'),
-        prepareBundle('schema', 'link/schema'),
-        prepareBundle('ws', 'link/ws'),
-        prepareBundle('http', 'link/http'),
-    ];
-}
-
-export default rollup();
+export default [
+        ...entryPoints.map(prepareBundle),
+        // Convert the ESM entry point to a single CJS bundle.
+        prepareCJS(
+        './dist/index.js',
+        './dist/apollo-client.cjs.js',
+        ),
+        // Minify that single CJS bundle.
+    prepareCJSMinified(
+    './dist/apollo-client.cjs.js',
+  ),
+];
